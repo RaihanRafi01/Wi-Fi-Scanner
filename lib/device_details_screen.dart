@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'Device.dart';
 import 'main.dart'; // Import the main file for the Device class
 
 class DeviceDetailsScreen extends StatefulWidget {

@@ -1,8 +1,12 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:dart_ping/dart_ping.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'device_details_screen.dart'; // Import the new screen
+import 'package:shared_preferences/shared_preferences.dart';
+import 'Device.dart'; // Ensure you have this model defined properly
+import 'device_details_screen.dart'; // Make sure this is defined
 import 'dart:async';
 
 class WifiScanner extends StatefulWidget {
@@ -12,25 +16,24 @@ class WifiScanner extends StatefulWidget {
 
 class _WifiScannerState extends State<WifiScanner> {
   final NetworkInfo _networkInfo = NetworkInfo();
-  String? _wifiName = '';
-  String? _wifiIP = '';
-  String? _subnetMask = '255.255.255.0'; // Placeholder
-  String? _dns1 = '8.8.8.8'; // Placeholder
-  String? _dns2 = '8.8.4.4'; // Placeholder
+  String? _wifiName;
+  String? _wifiIP;
   List<Device> _connectedDevices = [];
-  List<NetworkHistory> _networkHistory = []; // Track previous connections
+  List<NetworkHistory> _networkHistory = [];
   Timer? _timer;
+  final DateFormat dateFormat = DateFormat('dd MMM, hh:mm a');
 
   @override
   void initState() {
     super.initState();
     _requestPermissions();
-    _startPolling(); // Start polling for Wi-Fi changes
+    _loadNetworkHistory();
+    _startPolling();
   }
 
   @override
   void dispose() {
-    _timer?.cancel(); // Cancel the timer when disposing
+    _timer?.cancel();
     super.dispose();
   }
 
@@ -47,22 +50,21 @@ class _WifiScannerState extends State<WifiScanner> {
     try {
       _wifiName = await _networkInfo.getWifiName();
       _wifiIP = await _networkInfo.getWifiIP();
+      print('Connected to Wi-Fi: $_wifiName'); // Debugging print
       if (_wifiName != null) {
-        _recordNetworkHistory(_wifiName!); // Record network history when connected
+        await _recordNetworkHistory(_wifiName!);
+        _scanNetwork(_wifiIP!);
       }
     } catch (e) {
       print('Failed to get network info: $e');
     }
 
     setState(() {});
-
-    if (_wifiIP != null) {
-      _scanNetwork(_wifiIP!);
-    }
   }
 
   void _scanNetwork(String deviceIP) async {
     final subnet = deviceIP.substring(0, deviceIP.lastIndexOf('.'));
+    _connectedDevices.clear(); // Clear previous devices
     final futures = <Future>[];
 
     for (int i = 1; i < 255; i++) {
@@ -84,9 +86,9 @@ class _WifiScannerState extends State<WifiScanner> {
             name: ip, // Default name as IP
             type: _determineDeviceType(ip),
             gateway: '192.168.1.1', // Placeholder for gateway
-            subnetMask: _subnetMask ?? 'Unavailable',
-            dns1: _dns1 ?? 'Unavailable',
-            dns2: _dns2 ?? 'Unavailable',
+            subnetMask: '255.255.255.0', // Placeholder
+            dns1: '8.8.8.8', // Placeholder
+            dns2: '8.8.4.4', // Placeholder
           ));
         });
       }
@@ -94,11 +96,7 @@ class _WifiScannerState extends State<WifiScanner> {
   }
 
   String _determineDeviceType(String ip) {
-    // Placeholder logic to determine device type
-    if (ip.startsWith("192.168.1.")) {
-      return "Mobile";
-    }
-    return "Generic";
+    return ip.startsWith("192.168.1") ? "Mobile" : "Generic";
   }
 
   void _navigateToDeviceDetails(Device device) {
@@ -120,33 +118,99 @@ class _WifiScannerState extends State<WifiScanner> {
     );
   }
 
-  void _reloadDevices() {
-    setState(() {
-      _connectedDevices.clear();
-    });
-    if (_wifiIP != null) {
-      _scanNetwork(_wifiIP!);
-    }
-  }
+  Future<void> _recordNetworkHistory(String wifiName) async {
+    final existingHistoryIndex = _networkHistory.indexWhere((history) => history.wifiName == wifiName);
 
-  void _recordNetworkHistory(String wifiName) {
-    // Check if the current wifiName is already in the network history
-    bool exists = _networkHistory.any((history) => history.wifiName == wifiName);
-
-    if (!exists) {
-      _networkHistory.add(NetworkHistory(
+    if (existingHistoryIndex != -1) {
+      // Update existing entry
+      setState(() {
+        _networkHistory[existingHistoryIndex].devices = List.from(_connectedDevices);
+        _networkHistory[existingHistoryIndex].timestamp = DateTime.now();
+      });
+    } else {
+      // Create and add new history entry
+      NetworkHistory newHistory = NetworkHistory(
         wifiName: wifiName,
         timestamp: DateTime.now(),
         devices: List.from(_connectedDevices),
-      ));
+      );
+
+      setState(() {
+        _networkHistory.add(newHistory);
+      });
+
+      // Save to Shared Preferences
+      final prefs = await SharedPreferences.getInstance();
+      List<String> histories = prefs.getStringList('network_history') ?? [];
+      histories.add(newHistoryToJson(newHistory)); // Save the new history entry
+      await prefs.setStringList('network_history', histories);
+
+      print('Network history saved: ${newHistoryToJson(newHistory)}'); // Debugging output
     }
   }
 
+
+
+  String newHistoryToJson(NetworkHistory history) {
+    return jsonEncode({
+      'wifiName': history.wifiName,
+      'timestamp': history.timestamp.toIso8601String(),
+      'devices': history.devices.map((device) => deviceToJson(device)).toList(),
+    });
+  }
+
+  String deviceToJson(Device device) {
+    return jsonEncode({
+      'ip': device.ip,
+      'status': device.status,
+      'name': device.name,
+      'icon': device.icon?.codePoint,
+      'type': device.type,
+      'gateway': device.gateway,
+      'subnetMask': device.subnetMask,
+      'dns1': device.dns1,
+      'dns2': device.dns2,
+    });
+  }
+
+  Future<void> _loadNetworkHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    List<String>? histories = prefs.getStringList('network_history');
+    if (histories != null) {
+      _networkHistory = histories.map((json) => jsonToNetworkHistory(json)).toList();
+      print('Loaded network history: $_networkHistory'); // Debugging output
+      setState(() {});
+    }
+  }
+
+  NetworkHistory jsonToNetworkHistory(String json) {
+    Map<String, dynamic> data = jsonDecode(json);
+    List<Device> devices = (data['devices'] as List).map((d) => jsonToDevice(d)).toList();
+    return NetworkHistory(
+      wifiName: data['wifiName'],
+      timestamp: DateTime.parse(data['timestamp']),
+      devices: devices,
+    );
+  }
+
+  Device jsonToDevice(Map<String, dynamic> json) {
+    return Device(
+      ip: json['ip'],
+      status: json['status'],
+      name: json['name'],
+      icon: IconData(json['icon']),
+      type: json['type'],
+      gateway: json['gateway'],
+      subnetMask: json['subnetMask'],
+      dns1: json['dns1'],
+      dns2: json['dns2'],
+    );
+  }
 
   void _onWifiChange() async {
     await _initNetworkInfo();
     setState(() {
-      _connectedDevices.clear(); // Clear the list of connected devices
+      _connectedDevices.clear(); // Clear devices for new network
     });
   }
 
@@ -182,7 +246,6 @@ class _WifiScannerState extends State<WifiScanner> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Top Row with Wi-Fi Logo, Name, and Reload Button
                   Row(
                     children: [
                       Icon(Icons.wifi, size: 40),
@@ -195,7 +258,11 @@ class _WifiScannerState extends State<WifiScanner> {
                       ),
                       IconButton(
                         icon: Icon(Icons.refresh),
-                        onPressed: _reloadDevices,
+                        onPressed: () {
+                          if (_wifiIP != null) {
+                            _scanNetwork(_wifiIP!);
+                          }
+                        },
                       ),
                     ],
                   ),
@@ -232,15 +299,17 @@ class _WifiScannerState extends State<WifiScanner> {
                     margin: EdgeInsets.symmetric(vertical: 8.0),
                     child: ExpansionTile(
                       title: Text(history.wifiName),
-                      subtitle: Text('Connected on: ${history.timestamp}'),
-                      children: history.devices.map((device) {
+                      subtitle: Text('Connected on: ${dateFormat.format(history.timestamp)}'),
+                      children: history.devices.isNotEmpty
+                          ? history.devices.map((device) {
                         return ListTile(
                           leading: Icon(device.icon ?? Icons.device_unknown, size: 40),
                           title: Text(device.name ?? device.ip),
                           subtitle: Text('Status: ${device.status}'),
                           onTap: () => _navigateToDeviceDetails(device),
                         );
-                      }).toList(),
+                      }).toList()
+                          : [ListTile(title: Text('No devices connected'))],
                     ),
                   );
                 },
@@ -253,58 +322,10 @@ class _WifiScannerState extends State<WifiScanner> {
   }
 }
 
-class Device {
-  String ip;
-  String status;
-  String? name;
-  IconData? icon;
-  String type;
-  String gateway;
-  String subnetMask;
-  String dns1;
-  String dns2;
-
-  Device({
-    required this.ip,
-    required this.status,
-    this.name,
-    this.icon,
-    required this.type,
-    required this.gateway,
-    required this.subnetMask,
-    required this.dns1,
-    required this.dns2,
-  });
-
-  Device copyWith({
-    String? ip,
-    String? status,
-    String? name,
-    IconData? icon,
-    String? type,
-    String? gateway,
-    String? subnetMask,
-    String? dns1,
-    String? dns2,
-  }) {
-    return Device(
-      ip: ip ?? this.ip,
-      status: status ?? this.status,
-      name: name ?? this.name,
-      icon: icon ?? this.icon,
-      type: type ?? this.type,
-      gateway: gateway ?? this.gateway,
-      subnetMask: subnetMask ?? this.subnetMask,
-      dns1: dns1 ?? this.dns1,
-      dns2: dns2 ?? this.dns2,
-    );
-  }
-}
-
 class NetworkHistory {
   final String wifiName;
-  final DateTime timestamp;
-  final List<Device> devices; // List of devices connected during this network session
+  DateTime timestamp;
+  List<Device> devices;
 
   NetworkHistory({required this.wifiName, required this.timestamp, required this.devices});
 }
