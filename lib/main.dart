@@ -177,14 +177,10 @@ class _WifiScannerState extends State<WifiScanner> {
   Future<void> _saveNetworkHistory() async {
     final prefs = await SharedPreferences.getInstance();
     List<String> histories = _networkHistory.map((history) => newHistoryToJson(history)).toList();
-    bool isSaved = await prefs.setStringList('network_history', histories);
-
-    if (isSaved) {
-      print('Network history saved successfully.');
-    } else {
-      print('Failed to save network history.');
-    }
+    await prefs.setStringList('network_history', histories);
+    print('Network history saved successfully.');
   }
+
 
   // Function to load network history from SharedPreferences
   Future<void> _loadNetworkHistory() async {
@@ -195,11 +191,13 @@ class _WifiScannerState extends State<WifiScanner> {
       setState(() {
         _networkHistory = histories.map((json) => jsonToNetworkHistory(json)).toList();
       });
-      print('Loaded network history: $_networkHistory'); // Debugging output
+      print('Loaded network history: $_networkHistory');
     } else {
       print('No network history found.');
     }
   }
+
+
 
   String newHistoryToJson(NetworkHistory history) {
     return jsonEncode({
@@ -308,9 +306,9 @@ class _WifiScannerState extends State<WifiScanner> {
                   ),
                   SizedBox(height: 20),
                   _isScanning
-                      ? Center(child: CircularProgressIndicator()) // Show loading indicator during scanning
+                      ? const Center(child: CircularProgressIndicator()) // Show loading indicator during scanning
                       : _connectedDevices.isEmpty
-                      ? Center(child: Text('No devices found.')) // Show message if no devices are found
+                      ? const Center(child: CircularProgressIndicator()) // Show message if no devices are found
                       : Expanded(
                     child: ListView.builder(
                       itemCount: _connectedDevices.length,
