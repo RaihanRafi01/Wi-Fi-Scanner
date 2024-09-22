@@ -21,13 +21,16 @@ class _WifiScannerState extends State<WifiScanner> {
   List<Device> _connectedDevices = [];
   List<NetworkHistory> _networkHistory = [];
   Timer? _timer;
+  bool _isScanning = false; // Flag to check if scanning is in progress
   final DateFormat dateFormat = DateFormat('dd MMM, hh:mm a');
 
   @override
   void initState() {
     super.initState();
     _requestPermissions();
-    _loadNetworkHistory();
+    _loadNetworkHistory().then((_) {
+      _initNetworkInfo(); // Initialize network info after loading history
+    });
     _startPolling();
   }
 
@@ -51,9 +54,10 @@ class _WifiScannerState extends State<WifiScanner> {
       _wifiName = await _networkInfo.getWifiName();
       _wifiIP = await _networkInfo.getWifiIP();
       print('Connected to Wi-Fi: $_wifiName'); // Debugging print
-      if (_wifiName != null) {
+      if (_wifiName != null && _wifiIP != null) {
+        // Scan network before recording the history
+        await _scanNetwork(_wifiIP!);
         await _recordNetworkHistory(_wifiName!);
-        _scanNetwork(_wifiIP!);
       }
     } catch (e) {
       print('Failed to get network info: $e');
@@ -62,23 +66,37 @@ class _WifiScannerState extends State<WifiScanner> {
     setState(() {});
   }
 
-  void _scanNetwork(String deviceIP) async {
+  Future<void> _scanNetwork(String deviceIP) async {
+    setState(() {
+      _isScanning = true; // Set scanning to true before starting the scan
+      _connectedDevices.clear(); // Clear previous devices
+    });
+
     final subnet = deviceIP.substring(0, deviceIP.lastIndexOf('.'));
-    _connectedDevices.clear(); // Clear previous devices
-    final futures = <Future>[];
+    print('Scanning subnet: $subnet');
 
-    for (int i = 1; i < 255; i++) {
+    Timer.periodic(Duration(seconds: 5), (timer) {
+      if (_connectedDevices.isNotEmpty) {
+        print('Scan completed. Found ${_connectedDevices.length} devices.');
+        _recordNetworkHistory(_wifiName!); // Record network history here
+        setState(() {
+          _isScanning = false; // Stop scanning
+        });
+        timer.cancel(); // Stop the timer
+      }
+    });
+
+    for (int i = 1; i < 255; i++) { // Scan the full range
       final ip = '$subnet.$i';
-      futures.add(_pingDevice(ip));
+      _pingDevice(ip); // Call ping directly without waiting for Future
     }
-
-    await Future.wait(futures);
   }
 
   Future<void> _pingDevice(String ip) async {
-    final ping = Ping(ip, count: 1, timeout: 1000);
+    final ping = Ping(ip, count: 1, timeout: 2000); // Keep it responsive
     await for (final PingData data in ping.stream) {
       if (data.response != null) {
+        print('Device found: $ip');
         setState(() {
           _connectedDevices.add(Device(
             ip: ip,
@@ -91,9 +109,14 @@ class _WifiScannerState extends State<WifiScanner> {
             dns2: '8.8.4.4', // Placeholder
           ));
         });
+      } else {
+        print('No response from $ip');
       }
     }
   }
+
+
+
 
   String _determineDeviceType(String ip) {
     return ip.startsWith("192.168.1") ? "Mobile" : "Generic";
@@ -119,6 +142,12 @@ class _WifiScannerState extends State<WifiScanner> {
   }
 
   Future<void> _recordNetworkHistory(String wifiName) async {
+    if (_connectedDevices.isEmpty) {
+      print('No devices to record in network history.');
+      return; // No devices to record
+    }
+
+    // Find if the network already exists in the history
     final existingHistoryIndex = _networkHistory.indexWhere((history) => history.wifiName == wifiName);
 
     if (existingHistoryIndex != -1) {
@@ -138,18 +167,39 @@ class _WifiScannerState extends State<WifiScanner> {
       setState(() {
         _networkHistory.add(newHistory);
       });
+    }
 
-      // Save to Shared Preferences
-      final prefs = await SharedPreferences.getInstance();
-      List<String> histories = prefs.getStringList('network_history') ?? [];
-      histories.add(newHistoryToJson(newHistory)); // Save the new history entry
-      await prefs.setStringList('network_history', histories);
+    // Save the updated history to SharedPreferences
+    await _saveNetworkHistory();
+  }
 
-      print('Network history saved: ${newHistoryToJson(newHistory)}'); // Debugging output
+  // Function to save network history to SharedPreferences
+  Future<void> _saveNetworkHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    List<String> histories = _networkHistory.map((history) => newHistoryToJson(history)).toList();
+    bool isSaved = await prefs.setStringList('network_history', histories);
+
+    if (isSaved) {
+      print('Network history saved successfully.');
+    } else {
+      print('Failed to save network history.');
     }
   }
 
+  // Function to load network history from SharedPreferences
+  Future<void> _loadNetworkHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    List<String>? histories = prefs.getStringList('network_history');
 
+    if (histories != null) {
+      setState(() {
+        _networkHistory = histories.map((json) => jsonToNetworkHistory(json)).toList();
+      });
+      print('Loaded network history: $_networkHistory'); // Debugging output
+    } else {
+      print('No network history found.');
+    }
+  }
 
   String newHistoryToJson(NetworkHistory history) {
     return jsonEncode({
@@ -173,16 +223,6 @@ class _WifiScannerState extends State<WifiScanner> {
     });
   }
 
-  Future<void> _loadNetworkHistory() async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String>? histories = prefs.getStringList('network_history');
-    if (histories != null) {
-      _networkHistory = histories.map((json) => jsonToNetworkHistory(json)).toList();
-      print('Loaded network history: $_networkHistory'); // Debugging output
-      setState(() {});
-    }
-  }
-
   NetworkHistory jsonToNetworkHistory(String json) {
     Map<String, dynamic> data = jsonDecode(json);
     List<Device> devices = (data['devices'] as List).map((d) => jsonToDevice(d)).toList();
@@ -198,7 +238,7 @@ class _WifiScannerState extends State<WifiScanner> {
       ip: json['ip'],
       status: json['status'],
       name: json['name'],
-      icon: IconData(json['icon']),
+      icon: json['icon'] != null ? IconData(json['icon'], fontFamily: 'MaterialIcons') : null,
       type: json['type'],
       gateway: json['gateway'],
       subnetMask: json['subnetMask'],
@@ -267,8 +307,11 @@ class _WifiScannerState extends State<WifiScanner> {
                     ],
                   ),
                   SizedBox(height: 20),
-                  Text('Connected Devices:', style: TextStyle(fontSize: 18)),
-                  Expanded(
+                  _isScanning
+                      ? Center(child: CircularProgressIndicator()) // Show loading indicator during scanning
+                      : _connectedDevices.isEmpty
+                      ? Center(child: Text('No devices found.')) // Show message if no devices are found
+                      : Expanded(
                     child: ListView.builder(
                       itemCount: _connectedDevices.length,
                       itemBuilder: (context, index) {
