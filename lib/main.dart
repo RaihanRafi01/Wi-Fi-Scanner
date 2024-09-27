@@ -5,8 +5,8 @@ import 'package:network_info_plus/network_info_plus.dart';
 import 'package:dart_ping/dart_ping.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'Device.dart'; // Ensure you have this model defined properly
-import 'device_details_screen.dart'; // Make sure this is defined
+import 'Device.dart';
+import 'device_details_screen.dart';
 import 'dart:async';
 
 class WifiScanner extends StatefulWidget {
@@ -68,7 +68,7 @@ class _WifiScannerState extends State<WifiScanner> {
 
   Future<void> _scanNetwork(String deviceIP) async {
     setState(() {
-      _isScanning = true; // Set scanning to true before starting the scan
+      _isScanning = true;
       _connectedDevices.clear(); // Clear previous devices
     });
 

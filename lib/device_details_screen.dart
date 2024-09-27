@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'Device.dart';
-import 'main.dart'; // Import the main file for the Device class
 
 class DeviceDetailsScreen extends StatefulWidget {
   final Device device;
@@ -132,7 +131,6 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
         return 'Printer';
       case FontAwesomeIcons.headphones:
         return 'Headphones';
-      // Add more cases for other icons
       default:
         return 'Unknown Icon';
     }
@@ -153,7 +151,6 @@ class IconSelectionScreen extends StatelessWidget {
     FontAwesomeIcons.camera,
     FontAwesomeIcons.fax,
     FontAwesomeIcons.headphones,
-    // Add more icons as needed
   ];
 
   @override
@@ -212,7 +209,6 @@ class IconSelectionScreen extends StatelessWidget {
         return 'Printer';
       case FontAwesomeIcons.headphones:
         return 'Headphones';
-      // Add more cases for other icons
       default:
         return 'Unknown Icon';
     }
