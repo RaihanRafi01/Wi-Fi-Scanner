@@ -7,7 +7,8 @@ class DeviceDetailsScreen extends StatefulWidget {
   final Device device;
   final ValueChanged<Device> onUpdate;
 
-  DeviceDetailsScreen({required this.device, required this.onUpdate});
+  const DeviceDetailsScreen(
+      {super.key, required this.device, required this.onUpdate});
 
   @override
   _DeviceDetailsScreenState createState() => _DeviceDetailsScreenState();
@@ -32,7 +33,7 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Edit Device Information'),
+        title: const Text('Edit Device Information'),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -40,43 +41,48 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
           children: [
             TextField(
               controller: _nameController,
-              decoration: InputDecoration(labelText: 'Edit Device Name'),
+              decoration: const InputDecoration(labelText: 'Edit Device Name'),
             ),
-            SizedBox(height: 10),
-            Text('Select Icon', style: TextStyle(fontSize: 16)),
+            const SizedBox(height: 10),
+            const Text('Select Icon', style: TextStyle(fontSize: 16)),
             GestureDetector(
               onTap: () async {
                 final selectedIcon = await Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => IconSelectionScreen(currentIcon: widget.device.icon ?? FontAwesomeIcons.mobileScreen),
+                    builder: (context) => IconSelectionScreen(
+                        currentIcon: widget.device.icon ??
+                            FontAwesomeIcons.mobileScreen),
                   ),
                 );
                 if (selectedIcon != null) {
                   setState(() {
-                    widget.device.icon = selectedIcon ?? FontAwesomeIcons.mobileScreen; // Default icon
+                    widget.device.icon = selectedIcon ??
+                        FontAwesomeIcons.mobileScreen; // Default icon
                   });
                 }
               },
               child: Row(
                 children: [
-                  Icon(widget.device.icon ?? FontAwesomeIcons.mobileScreen, size: 50), // Default icon
-                  SizedBox(width: 10),
+                  Icon(widget.device.icon ?? FontAwesomeIcons.mobileScreen,
+                      size: 50), // Default icon
+                  const SizedBox(width: 10),
                   Text(
-                    _getIconName(widget.device.icon ?? FontAwesomeIcons.mobileScreen), // Default icon name
-                    style: TextStyle(fontSize: 18),
+                    _getIconName(widget.device.icon ??
+                        FontAwesomeIcons.mobileScreen), // Default icon name
+                    style: const TextStyle(fontSize: 18),
                   ),
                 ],
               ),
             ),
-            SizedBox(height: 20),
+            const SizedBox(height: 20),
             _buildDetailCard('Status', widget.device.status),
             _buildDetailCard('IP Address', widget.device.ip),
             _buildDetailCard('Gateway', widget.device.gateway),
             _buildDetailCard('Subnet Mask', widget.device.subnetMask),
             _buildDetailCard('DNS 1', widget.device.dns1),
             _buildDetailCard('DNS 2', widget.device.dns2),
-            SizedBox(height: 20),
+            const SizedBox(height: 20),
             ElevatedButton(
               onPressed: () {
                 final updatedDevice = widget.device.copyWith(
@@ -85,7 +91,7 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
                 widget.onUpdate(updatedDevice);
                 Navigator.pop(context);
               },
-              child: Text('Save Changes'),
+              child: const Text('Save Changes'),
             ),
           ],
         ),
@@ -95,9 +101,10 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
 
   Widget _buildDetailCard(String title, String value) {
     return Card(
-      margin: EdgeInsets.symmetric(vertical: 8.0),
+      margin: const EdgeInsets.symmetric(vertical: 8.0),
       child: ListTile(
-        title: Text('$title: ', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text('$title: ',
+            style: const TextStyle(fontWeight: FontWeight.bold)),
         subtitle: Text(value),
       ),
     );
@@ -125,7 +132,7 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
         return 'Printer';
       case FontAwesomeIcons.headphones:
         return 'Headphones';
-    // Add more cases for other icons
+      // Add more cases for other icons
       default:
         return 'Unknown Icon';
     }
@@ -135,7 +142,7 @@ class _DeviceDetailsScreenState extends State<DeviceDetailsScreen> {
 class IconSelectionScreen extends StatelessWidget {
   final IconData currentIcon;
 
-  IconSelectionScreen({required this.currentIcon});
+  IconSelectionScreen({super.key, required this.currentIcon});
 
   final List<IconData> icons = [
     FontAwesomeIcons.desktop,
@@ -153,15 +160,15 @@ class IconSelectionScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Select Icon'),
+        title: const Text('Select Icon'),
       ),
       body: GridView.builder(
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 3, // 3 columns
           crossAxisSpacing: 8,
           mainAxisSpacing: 8,
         ),
-        padding: EdgeInsets.all(8),
+        padding: const EdgeInsets.all(8),
         itemCount: icons.length,
         itemBuilder: (context, index) {
           return GestureDetector(
@@ -173,7 +180,7 @@ class IconSelectionScreen extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(icons[index], size: 40),
-                  SizedBox(height: 5),
+                  const SizedBox(height: 5),
                   Text(
                     _getIconName(icons[index]),
                     textAlign: TextAlign.center,
@@ -205,7 +212,7 @@ class IconSelectionScreen extends StatelessWidget {
         return 'Printer';
       case FontAwesomeIcons.headphones:
         return 'Headphones';
-    // Add more cases for other icons
+      // Add more cases for other icons
       default:
         return 'Unknown Icon';
     }
